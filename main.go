@@ -4,26 +4,28 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"strconv"
+	"time"
 
-	"github.com/joho/godotenv"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"github.com/gin-contrib/cors"
-	// "time"
 )
 
 type Item struct {
 	ID       primitive.ObjectID `json:"id" bson:"_id,omitempty"`
-	Name     string             `json:"name"`
+	Name     string             `json:"name" bson:"name"`
 	Quantity float32            `json:"quantity"`
 	Unit     string             `json:"unit"`
 	Location string             `json:"location"`
 	Category string             `json:"category"`
-	Expiry   string             `json:"expiry"`
+	Expiry   time.Time          `json:"expiry" bson:"expiry"` 
 	Status   int                `json:"status"`
 }
 
@@ -35,7 +37,6 @@ func DatabaseMiddleware(collection *mongo.Collection, thresholds map[string]floa
 }
 
 func test_fn(c *gin.Context) {
-	fmt.Println("test endpoint was hit")
 
 	c.JSON(200, gin.H{
 		"message": "hello, world!",
@@ -43,17 +44,16 @@ func test_fn(c *gin.Context) {
 }
 
 func insert_item(c *gin.Context) {
-	fmt.Println("hit insert item")
 
 	var item Item
 
 	if err := c.ShouldBind(&item); err != nil {
 		c.JSON(400, gin.H{
 			"error": "Invalid JSON data",
+			"err":   err,
 		})
 		return
 	}
-	item.Status = 0
 
 	collection, exists := c.Get("collection")
 	if !exists {
@@ -71,7 +71,7 @@ func insert_item(c *gin.Context) {
 		return
 	}
 	thresholds := thresholdInterface.(map[string]float32)
-	
+
 	if threshold, exists := thresholds[item.Category]; exists {
 		if item.Quantity >= threshold*1.3 {
 			item.Status = 2
@@ -81,7 +81,7 @@ func insert_item(c *gin.Context) {
 			item.Status = 0
 		}
 	}
-	
+
 	result, err := collection.(*mongo.Collection).InsertOne(context.Background(), item)
 	if err != nil {
 		c.JSON(500, gin.H{
@@ -132,17 +132,77 @@ func remove_item(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{
-        "message": "Item deleted successfully",
-        "itemID":  itemID,
-    })
+		"message": "Item deleted successfully",
+		"itemID":  itemID,
+	})
 }
 
 func search(c *gin.Context) {
 
 }
 
-func expiringsoon(c *gin.Context){
+func expiringsoon(c *gin.Context) {
+	limitStr := c.DefaultQuery("limit", "10") // Set a default limit if not provided
 
+	// check if limit is an int
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit > 10 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Invalid limit argument",
+		})
+		return
+	}
+
+	collection, exists := c.Get("collection")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to get database collection",
+		})
+		return
+	}
+
+	// Get objects expiring within three days
+	threeDays := time.Now().Add(3 * 24 * time.Hour)
+	filter := bson.M{"expiry": bson.M{"$lte": threeDays}}
+
+	cursor, err := collection.(*mongo.Collection).Find(context.Background(), filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to find items",
+			"details": err.Error(),
+		})
+		return
+	}
+	defer cursor.Close(context.Background())
+
+	var items []Item
+	for cursor.Next(context.Background()) {
+		var item Item
+		if err := cursor.Decode(&item); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to decode item",
+				"details": err.Error(),
+			})
+			return
+		}
+		items = append(items, item)
+	}
+
+	if err := cursor.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Cursor error",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	if len(items) == 0 {
+		fmt.Println("No items found.")
+		c.JSON(http.StatusOK, []Item{}) // Return an empty array in case of no items
+	} else {
+		fmt.Println("Items found:", len(items))
+		c.JSON(http.StatusOK, items)
+	}
 }
 
 func main() {
@@ -154,14 +214,14 @@ func main() {
 	conn_string := os.Getenv("CONN_STRING")
 
 	thresholds := map[string]float32{
-		"nuts":               0.5, 
-		"dals":               1.0, 
-		"condiments":         0.2, 
-		"spices":             0.1, 
-		"fruits":             2.0, 
-		"snacks":             0.3, 
-		"oils":               0.3, 
-		"basic pantry items": 1.0, 
+		"nuts":               0.5,
+		"dals":               1.0,
+		"condiments":         0.2,
+		"spices":             0.1,
+		"fruits":             2.0,
+		"snacks":             0.3,
+		"oils":               0.3,
+		"basic pantry items": 1.0,
 	}
 
 	// Set up the MongoDB client
@@ -187,7 +247,7 @@ func main() {
 	config.AllowOrigins = []string{
 		"http://localhost:5173",
 	}
-	
+
 	r.Use(func(c *gin.Context) {
 		// Replace "*" with the specific origin(s) you want to allow
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
@@ -202,7 +262,6 @@ func main() {
 
 		c.Next()
 	})
-
 
 	r.Use(cors.New(config))
 	r.Use(DatabaseMiddleware(collection, thresholds))
