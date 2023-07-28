@@ -140,6 +140,10 @@ func search(c *gin.Context) {
 
 }
 
+func expiringsoon(c *gin.Context){
+	
+}
+
 func main() {
 
 	err := godotenv.Load()
@@ -184,6 +188,7 @@ func main() {
 	r.POST("/insert", insert_item)
 	r.DELETE("/delete/:id", remove_item)
 	r.GET("/search", search)
+	r.GET("/expiringsoon", expiringsoon)
 
 	r.Run(":8080")
 }
