@@ -185,10 +185,25 @@ func main() {
 
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{
-		"http://localhost:5137",
-		"http://localhost:80",
+		"http://localhost:5173",
 	}
 	
+	r.Use(func(c *gin.Context) {
+		// Replace "*" with the specific origin(s) you want to allow
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204) // No Content
+			return
+		}
+
+		c.Next()
+	})
+
+
 	r.Use(cors.New(config))
 	r.Use(DatabaseMiddleware(collection, thresholds))
 
