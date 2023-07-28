@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"github.com/gin-contrib/cors"
 	// "time"
 )
 
@@ -141,7 +142,7 @@ func search(c *gin.Context) {
 }
 
 func expiringsoon(c *gin.Context){
-	
+
 }
 
 func main() {
@@ -182,6 +183,13 @@ func main() {
 
 	r := gin.Default()
 
+	config := cors.DefaultConfig()
+	config.AllowOrigins = []string{
+		"http://localhost:5137",
+		"http://localhost:80",
+	}
+	
+	r.Use(cors.New(config))
 	r.Use(DatabaseMiddleware(collection, thresholds))
 
 	r.GET("/hello", test_fn)
