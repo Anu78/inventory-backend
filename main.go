@@ -12,6 +12,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -310,7 +311,11 @@ func main() {
 	defer logFile.Close()
 
 	log.SetOutput(logFile)
+
+	logger := logrus.New()
+	logger.SetOutput(logFile)
 	
+	gin.DefaultWriter = logger.Writer()
 	err = godotenv.Load()
 	if err != nil {
 		log.Fatal("error loading .env file:", err)
