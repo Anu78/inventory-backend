@@ -316,6 +316,7 @@ func main() {
 	logger.SetOutput(logFile)
 	
 	gin.DefaultWriter = logger.Writer()
+	gin.DefaultErrorWriter = logger.Writer()
 	err = godotenv.Load()
 	if err != nil {
 		log.Fatal("error loading .env file:", err)
