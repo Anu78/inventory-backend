@@ -302,7 +302,16 @@ func forcelistupdate(c *gin.Context) {
 
 func main() {
 
-	err := godotenv.Load()
+	logFile, err := os.Create("log.txt")
+	if err != nil {
+		log.Fatal("failed to create log file", err)
+	}
+
+	defer logFile.Close()
+
+	log.SetOutput(logFile)
+	
+	err = godotenv.Load()
 	if err != nil {
 		log.Fatal("error loading .env file:", err)
 	}
