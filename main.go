@@ -307,6 +307,7 @@ func main() {
 		log.Fatal("error loading .env file:", err)
 	}
 	conn_string := os.Getenv("CONN_STRING")
+	cors_port := os.Getenv("PORT")
 
 	thresholds := map[string]float32{
 		"nuts":               0.5,
@@ -341,7 +342,7 @@ func main() {
 
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{
-		"http://localhost:5173",
+		"http://localhost:" + cors_port,
 	}
 
 	r.Use(func(c *gin.Context) {
