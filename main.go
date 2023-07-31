@@ -25,8 +25,9 @@ type Item struct {
 	Unit     string             `json:"unit"`
 	Location string             `json:"location"`
 	Category string             `json:"category"`
-	Expiry   time.Time          `json:"expiry" bson:"expiry"` 
+	Expiry   time.Time          `json:"expiry" bson:"expiry"`
 	Status   int                `json:"status"`
+	Time     time.Time          `json:"time" bson:"time"`
 }
 
 func DatabaseMiddleware(collection *mongo.Collection, thresholds map[string]float32) gin.HandlerFunc {
@@ -72,6 +73,11 @@ func insert_item(c *gin.Context) {
 	}
 	thresholds := thresholdInterface.(map[string]float32)
 
+	switch(item.Category){
+		
+	}
+
+	
 	if threshold, exists := thresholds[item.Category]; exists {
 		if item.Quantity >= threshold*1.3 {
 			item.Status = 2
@@ -82,6 +88,7 @@ func insert_item(c *gin.Context) {
 		}
 	}
 
+	item.Time = time.Now()
 	result, err := collection.(*mongo.Collection).InsertOne(context.Background(), item)
 	if err != nil {
 		c.JSON(500, gin.H{
@@ -138,8 +145,69 @@ func remove_item(c *gin.Context) {
 }
 
 func search(c *gin.Context) {
+	query := c.Query("query")
+	category := c.Query("category")
+	location := c.Query("location")
 
+	limit := 20
+
+	collection, exists := c.Get("collection")
+	if !exists {
+		c.JSON(500, gin.H{
+			"error": "failed to get database collection",
+		})
+		return
+	}
+
+	findOptions := options.Find()
+	findOptions.SetLimit(int64(limit))
+
+	filter := bson.M{}
+	if query != "" {
+		filter["$text"] = bson.M{"$search": query}
+	}
+
+	cursor, err := collection.(*mongo.Collection).Find(context.Background(), filter, findOptions)
+	if err != nil {
+		c.JSON(200, gin.H{
+			"message": "no matching items for that search",
+		})
+		return
+	}
+	defer cursor.Close(context.Background())
+
+	var items []Item
+
+	for cursor.Next(context.Background()) {
+		var item Item
+		if err := cursor.Decode(&item); err != nil {
+			// Handle the error appropriately.
+			c.JSON(403, gin.H{
+				"message": "there was an error decoding the response",
+			})
+			return
+		}
+		if category != "" && item.Category != category {
+			continue
+		}
+		if location != "" && item.Location != location {
+			continue
+		}
+
+		items = append(items, item)
+	}
+
+	if err := cursor.Err(); err != nil {
+		// Handle the error appropriately.
+		c.JSON(403, gin.H{
+			"message": "failed to fetch items",
+		})
+		return
+	}
+
+	c.JSON(200, items)
 }
+
 
 func expiringsoon(c *gin.Context) {
 	limitStr := c.DefaultQuery("limit", "10") // Set a default limit if not provided
@@ -205,6 +273,22 @@ func expiringsoon(c *gin.Context) {
 	}
 }
 
+func lowitems(c *gin.Context) {
+
+}
+
+func updateitem(c *gin.Context) {
+
+}
+
+func grocerylist(c *gin.Context) {
+
+}
+
+func forcelistupdate(c *gin.Context) {
+	// UpdateList()
+}
+
 func main() {
 
 	err := godotenv.Load()
@@ -225,7 +309,8 @@ func main() {
 	}
 
 	// Set up the MongoDB client
-	clientOptions := options.Client().ApplyURI(conn_string)
+	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
+	clientOptions := options.Client().ApplyURI(conn_string).SetServerAPIOptions(serverAPI)
 	client, err := mongo.Connect(context.Background(), clientOptions)
 	if err != nil {
 		log.Fatal(err)
@@ -271,6 +356,12 @@ func main() {
 	r.DELETE("/delete/:id", remove_item)
 	r.GET("/search", search)
 	r.GET("/expiringsoon", expiringsoon)
+	r.GET("/lowitems", lowitems)
+	r.PATCH("/updateitem/:id", updateitem)
+	r.GET("/grocerylist", grocerylist)
+	r.GET("/forcelist", forcelistupdate)
+	
+	// Recurring()
 
 	r.Run(":8080")
 }
