@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -277,10 +276,8 @@ func expiringsoon(c *gin.Context) {
 	}
 
 	if len(items) == 0 {
-		fmt.Println("No items found.")
 		c.JSON(http.StatusOK, []Item{}) // Return an empty array in case of no items
 	} else {
-		fmt.Println("Items found:", len(items))
 		c.JSON(http.StatusOK, items)
 	}
 }
