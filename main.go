@@ -317,6 +317,13 @@ func main() {
 	}
 	conn_string := os.Getenv("CONN_STRING")
 	cors_port := os.Getenv("PORT")
+	mode := os.Getenv("MODE")
+
+	if mode == "RELEASE" {
+		gin.SetMode(gin.ReleaseMode)
+	} else {
+		gin.SetMode(gin.DebugMode)
+	}
 
 	thresholds := map[string]float32{
 		"nuts":               0.5,
@@ -342,7 +349,7 @@ func main() {
 	if err != nil {
 		log.Fatal("Error connecting to MongoDB:", err)
 	}
-	fmt.Println("Connected to MongoDB!")
+	log.Println("Connected to MongoDB!")
 
 	database := client.Database("inventory-app")
 	collection := database.Collection("items-list")
