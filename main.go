@@ -73,11 +73,10 @@ func insert_item(c *gin.Context) {
 	}
 	thresholds := thresholdInterface.(map[string]float32)
 
-	switch(item.Category){
-		
+	switch item.Category {
+
 	}
 
-	
 	if threshold, exists := thresholds[item.Category]; exists {
 		if item.Quantity >= threshold*1.3 {
 			item.Status = 2
@@ -148,6 +147,7 @@ func search(c *gin.Context) {
 	query := c.Query("query")
 	category := c.Query("category")
 	location := c.Query("location")
+	recentStr := c.Query("recent")
 
 	limit := 20
 
@@ -162,9 +162,27 @@ func search(c *gin.Context) {
 	findOptions := options.Find()
 	findOptions.SetLimit(int64(limit))
 
+	sortOption := bson.D{}
+	if recentStr == "true" {
+		sortOption = bson.D{{Key: "time", Value: -1}}
+	}
+
+	findOptions.SetSort(sortOption)
+
 	filter := bson.M{}
 	if query != "" {
-		filter["$text"] = bson.M{"$search": query}
+		// Add $regex operator for name field
+		filter["name"] = bson.M{"$regex": query}
+	}
+
+	if category != "" {
+		// Add $regex operator for category field
+		filter["category"] = bson.M{"$regex": category}
+	}
+
+	if location != "" {
+		// Add $regex operator for location field
+		filter["location"] = bson.M{"$regex": location}
 	}
 
 	cursor, err := collection.(*mongo.Collection).Find(context.Background(), filter, findOptions)
@@ -187,12 +205,6 @@ func search(c *gin.Context) {
 			})
 			return
 		}
-		if category != "" && item.Category != category {
-			continue
-		}
-		if location != "" && item.Location != location {
-			continue
-		}
 
 		items = append(items, item)
 	}
@@ -207,7 +219,6 @@ func search(c *gin.Context) {
 
 	c.JSON(200, items)
 }
-
 
 func expiringsoon(c *gin.Context) {
 	limitStr := c.DefaultQuery("limit", "10") // Set a default limit if not provided
@@ -360,7 +371,7 @@ func main() {
 	r.PATCH("/updateitem/:id", updateitem)
 	r.GET("/grocerylist", grocerylist)
 	r.GET("/forcelist", forcelistupdate)
-	
+
 	// Recurring()
 
 	r.Run(":8080")
