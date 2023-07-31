@@ -321,7 +321,6 @@ func main() {
 		log.Fatal("error loading .env file:", err)
 	}
 	conn_string := os.Getenv("CONN_STRING")
-	cors_port := os.Getenv("PORT")
 	mode := os.Getenv("MODE")
 
 	if mode == "RELEASE" {
@@ -362,8 +361,14 @@ func main() {
 	r := gin.Default()
 
 	config := cors.DefaultConfig()
+	allowed_address := ""
+	if mode == "RELEASE" {
+		allowed_address = "http://172.16.1.146"
+	} else {
+		allowed_address = "http://localhost:5173"
+	}
 	config.AllowOrigins = []string{
-		"http://localhost:" + cors_port,
+		allowed_address,
 	}
 
 	r.Use(func(c *gin.Context) {
