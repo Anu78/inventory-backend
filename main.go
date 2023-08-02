@@ -175,12 +175,12 @@ func search(c *gin.Context) {
 		filter["name"] = bson.M{"$regex": query}
 	}
 
-	if category != "" {
+	if category != "all" {
 		// Add $regex operator for category field
 		filter["category"] = bson.M{"$regex": category}
 	}
 
-	if location != "" {
+	if location != "all" {
 		// Add $regex operator for location field
 		filter["location"] = bson.M{"$regex": location}
 	}
@@ -288,6 +288,59 @@ func lowitems(c *gin.Context) {
 
 func updateitem(c *gin.Context) {
 
+	var newItem Item
+	if err := c.ShouldBind(&newItem); err != nil {
+		c.JSON(400, gin.H{
+			"error": "Invalid JSON data",
+			"err":   err,
+		})
+		return
+	}
+
+	collection, exists := c.Get("collection")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to get database collection",
+		})
+		return
+	}
+
+	objID, err := primitive.ObjectIDFromHex(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "invalid item ID",
+			"err":     err,
+		})
+		return
+	}
+
+	filter := bson.M{"_id": objID}
+
+	var existingItem Item
+	err = collection.(*mongo.Collection).FindOne(context.Background(), filter).Decode(&existingItem)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "item was not found",
+			"err":     err,
+		})
+		return
+	}
+
+	existingItem.Quantity = newItem.Quantity
+
+	_, err = collection.(*mongo.Collection).ReplaceOne(context.Background(), filter, existingItem)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to update item in the database",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "item updated successfully",
+		"itemID":  existingItem.ID.Hex(),
+	})
+
 }
 
 func grocerylist(c *gin.Context) {
@@ -311,7 +364,7 @@ func main() {
 
 	logger := logrus.New()
 	logger.SetOutput(logFile)
-	
+
 	gin.DefaultWriter = logger.Writer()
 	gin.DefaultErrorWriter = logger.Writer()
 	err = godotenv.Load()
@@ -372,7 +425,7 @@ func main() {
 	r.Use(func(c *gin.Context) {
 		// Replace "*" with the specific origin(s) you want to allow
 		c.Writer.Header().Set("Access-Control-Allow-Origin", allowed_address)
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 
