@@ -414,7 +414,7 @@ func main() {
 	config := cors.DefaultConfig()
 	allowed_address := ""
 	if mode == "RELEASE" {
-		allowed_address = "http://172.16.2.194"
+		allowed_address = "http://172.16.3.76"
 	} else {
 		allowed_address = "http://localhost:5173"
 	}
