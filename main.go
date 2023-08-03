@@ -325,8 +325,12 @@ func updateitem(c *gin.Context) {
 		})
 		return
 	}
-
-	existingItem.Quantity = newItem.Quantity
+	if newItem.Quantity != 0 {
+		existingItem.Quantity = newItem.Quantity
+	}
+	if newItem.Location != "" {
+		existingItem.Location = newItem.Location
+	}
 
 	_, err = collection.(*mongo.Collection).ReplaceOne(context.Background(), filter, existingItem)
 	if err != nil {
@@ -414,7 +418,7 @@ func main() {
 	config := cors.DefaultConfig()
 	allowed_address := ""
 	if mode == "RELEASE" {
-		allowed_address = "http://172.16.3.76"
+		allowed_address = "http://172.16.3.76:600"
 	} else {
 		allowed_address = "http://localhost:5173"
 	}
