@@ -46,6 +46,17 @@ func test_fn(c *gin.Context) {
 
 func insert_item(c *gin.Context) {
 
+	capitalizeFirstLetter := func(s string) string {
+		if len(s) == 0 {
+			return s
+		}
+
+		firstChar := s[0]
+
+		capitalizedFirstChar := 'A' + (firstChar - 'a')
+		return string(capitalizedFirstChar) + s[1:]
+	}
+
 	var item Item
 
 	if err := c.ShouldBind(&item); err != nil {
@@ -55,7 +66,7 @@ func insert_item(c *gin.Context) {
 		})
 		return
 	}
-
+	item.Name = capitalizeFirstLetter(item.Name)
 	collection, exists := c.Get("collection")
 	if !exists {
 		c.JSON(500, gin.H{
