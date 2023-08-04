@@ -30,10 +30,18 @@ type Item struct {
 	Time     time.Time          `json:"time" bson:"time"`
 }
 
-func DatabaseMiddleware(collection *mongo.Collection, thresholds map[string]float32) gin.HandlerFunc {
+type Category struct {
+	ID      primitive.ObjectID  `json:"id" bson:"_id,omitempty"`
+	Name    string              `json:"name" bson:"name"`
+	LowT    int                  `json:"lowt"`
+	OkT    int                  `json:"okt"`
+}
+
+func DatabaseMiddleware(item_collection *mongo.Collection, cat_collection *mongo.Collection, thresholds map[string]float32) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Set("collection", collection)
+		c.Set("collection", item_collection)
 		c.Set("thresholds", thresholds)
+		c.Set("category-collection", cat_collection)
 	}
 }
 
@@ -48,6 +56,12 @@ func insert_item(c *gin.Context) {
 
 	capitalizeFirstLetter := func(s string) string {
 		if len(s) == 0 {
+			return s
+		}
+
+		runes := []rune(s)
+
+		if runes[0] >= 65 && runes[0] <= 90 {
 			return s
 		}
 
@@ -366,6 +380,22 @@ func forcelistupdate(c *gin.Context) {
 	// UpdateList()
 }
 
+func addcategory(c *gin.Context){
+	var newCategory Category
+	if err := c.ShouldBind(&newCategory); err != nil {
+		c.JSON(400, gin.H{
+			"error": "Invalid JSON data",
+			"err":   err,
+		})
+		return
+	}
+
+}
+
+func getcategories(c *gin.Context){
+	
+}
+
 func main() {
 
 	logFile, err := os.Create("log.txt")
@@ -422,7 +452,8 @@ func main() {
 	log.Println("Connected to MongoDB!")
 
 	database := client.Database("inventory-app")
-	collection := database.Collection("items-list")
+	items_collection := database.Collection("items-list")
+	category_collection := database.Collection("categories")
 
 	r := gin.Default()
 
@@ -453,7 +484,7 @@ func main() {
 	})
 
 	r.Use(cors.New(config))
-	r.Use(DatabaseMiddleware(collection, thresholds))
+	r.Use(DatabaseMiddleware(items_collection, category_collection, thresholds))
 
 	r.GET("/hello", test_fn)
 	r.POST("/insert", insert_item)
@@ -464,6 +495,8 @@ func main() {
 	r.PATCH("/updateitem/:id", updateitem)
 	r.GET("/grocerylist", grocerylist)
 	r.GET("/forcelist", forcelistupdate)
+	r.GET("/categories", getcategories)
+	r.POST("/addcategory", addcategory)
 
 	// Recurring()
 
