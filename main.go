@@ -31,10 +31,10 @@ type Item struct {
 }
 
 type Category struct {
-	ID      primitive.ObjectID  `json:"id" bson:"_id,omitempty"`
-	Name    string              `json:"name" bson:"name"`
-	LowT    int                  `json:"lowt"`
-	OkT    int                  `json:"okt"`
+	ID   primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	Name string             `json:"name" bson:"name"`
+	LowT int                `json:"lowt"`
+	OkT  int                `json:"okt"`
 }
 
 func DatabaseMiddleware(item_collection *mongo.Collection, cat_collection *mongo.Collection, thresholds map[string]float32) gin.HandlerFunc {
@@ -47,7 +47,7 @@ func DatabaseMiddleware(item_collection *mongo.Collection, cat_collection *mongo
 
 func test_fn(c *gin.Context) {
 
-	c.JSON(200, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"message": "hello, world!",
 	})
 }
@@ -74,7 +74,7 @@ func insert_item(c *gin.Context) {
 	var item Item
 
 	if err := c.ShouldBind(&item); err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid JSON data",
 			"err":   err,
 		})
@@ -83,7 +83,7 @@ func insert_item(c *gin.Context) {
 	item.Name = capitalizeFirstLetter(item.Name)
 	collection, exists := c.Get("collection")
 	if !exists {
-		c.JSON(500, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to get database collection",
 		})
 		return
@@ -91,7 +91,7 @@ func insert_item(c *gin.Context) {
 
 	thresholdInterface, exists := c.Get("thresholds")
 	if !exists {
-		c.JSON(500, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to get thresholds for statuses",
 		})
 		return
@@ -115,14 +115,14 @@ func insert_item(c *gin.Context) {
 	item.Time = time.Now()
 	result, err := collection.(*mongo.Collection).InsertOne(context.Background(), item)
 	if err != nil {
-		c.JSON(500, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to insert item into database",
 		})
 		return
 	}
 
 	insertedID := result.InsertedID.(primitive.ObjectID)
-	c.JSON(200, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"message":    "item inserted successfully",
 		"insertedID": insertedID.Hex(),
 	})
@@ -132,7 +132,7 @@ func remove_item(c *gin.Context) {
 	itemID := c.Param("id")
 	collection, exists := c.Get("collection")
 	if !exists {
-		c.JSON(500, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to get database collection",
 		})
 		return
@@ -140,7 +140,7 @@ func remove_item(c *gin.Context) {
 
 	objID, err := primitive.ObjectIDFromHex(itemID)
 	if err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid item ID",
 		})
 		return
@@ -149,20 +149,20 @@ func remove_item(c *gin.Context) {
 	filter := bson.M{"_id": objID}
 	result, err := collection.(*mongo.Collection).DeleteOne(context.Background(), filter)
 	if err != nil {
-		c.JSON(500, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to delete item from database",
 		})
 		return
 	}
 
 	if result.DeletedCount == 0 {
-		c.JSON(404, gin.H{
+		c.JSON(http.StatusNotFound, gin.H{
 			"message": "item not found",
 		})
 		return
 	}
 
-	c.JSON(200, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"message": "Item deleted successfully",
 		"itemID":  itemID,
 	})
@@ -178,7 +178,7 @@ func search(c *gin.Context) {
 
 	collection, exists := c.Get("collection")
 	if !exists {
-		c.JSON(500, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to get database collection",
 		})
 		return
@@ -187,12 +187,11 @@ func search(c *gin.Context) {
 	findOptions := options.Find()
 	findOptions.SetLimit(int64(limit))
 
-	sortOption := bson.D{}
 	if recentStr == "true" {
-		sortOption = bson.D{{Key: "time", Value: -1}}
+		findOptions.SetSort(bson.D{{Key: "time", Value: -1}})
+	} else {
+		findOptions.SetSort(bson.D{{Key: "time", Value: 1}})
 	}
-
-	findOptions.SetSort(sortOption)
 
 	filter := bson.M{}
 	if query != "" {
@@ -212,7 +211,7 @@ func search(c *gin.Context) {
 
 	cursor, err := collection.(*mongo.Collection).Find(context.Background(), filter, findOptions)
 	if err != nil {
-		c.JSON(200, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"message": "no matching items for that search",
 		})
 		return
@@ -225,7 +224,7 @@ func search(c *gin.Context) {
 		var item Item
 		if err := cursor.Decode(&item); err != nil {
 			// Handle the error appropriately.
-			c.JSON(403, gin.H{
+			c.JSON(http.StatusForbidden, gin.H{
 				"message": "there was an error decoding the response",
 			})
 			return
@@ -236,13 +235,13 @@ func search(c *gin.Context) {
 
 	if err := cursor.Err(); err != nil {
 		// Handle the error appropriately.
-		c.JSON(403, gin.H{
+		c.JSON(http.StatusForbidden, gin.H{
 			"message": "failed to fetch items",
 		})
 		return
 	}
 
-	c.JSON(200, items)
+	c.JSON(http.StatusOK, items)
 }
 
 func expiringsoon(c *gin.Context) {
@@ -265,9 +264,14 @@ func expiringsoon(c *gin.Context) {
 		return
 	}
 
-	// Get objects expiring within three days
-	threeDays := time.Now().Add(3 * 24 * time.Hour)
-	filter := bson.M{"expiry": bson.M{"$lte": threeDays}}
+	threeDays := time.Now().UTC().Add(3 * 24 * time.Hour)
+
+	filter := bson.M{
+		"expiry": bson.M{
+			"$lte": primitive.DateTime(threeDays.UnixNano() / int64(time.Millisecond)),
+			"$gt":  primitive.DateTime(0),
+		},
+	}
 
 	cursor, err := collection.(*mongo.Collection).Find(context.Background(), filter)
 	if err != nil {
@@ -289,6 +293,7 @@ func expiringsoon(c *gin.Context) {
 			})
 			return
 		}
+
 		items = append(items, item)
 	}
 
@@ -315,7 +320,7 @@ func updateitem(c *gin.Context) {
 
 	var newItem Item
 	if err := c.ShouldBind(&newItem); err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Invalid JSON data",
 			"err":   err,
 		})
@@ -376,14 +381,10 @@ func grocerylist(c *gin.Context) {
 
 }
 
-func forcelistupdate(c *gin.Context) {
-	// UpdateList()
-}
-
-func addcategory(c *gin.Context){
+func addcategory(c *gin.Context) {
 	var newCategory Category
 	if err := c.ShouldBind(&newCategory); err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid JSON data",
 			"err":   err,
 		})
@@ -392,8 +393,8 @@ func addcategory(c *gin.Context){
 
 }
 
-func getcategories(c *gin.Context){
-	
+func getcategories(c *gin.Context) {
+
 }
 
 func main() {
@@ -469,14 +470,13 @@ func main() {
 	}
 
 	r.Use(func(c *gin.Context) {
-		// Replace "*" with the specific origin(s) you want to allow
 		c.Writer.Header().Set("Access-Control-Allow-Origin", allowed_address)
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204) // No Content
+			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 
@@ -494,7 +494,6 @@ func main() {
 	r.GET("/lowitems", lowitems)
 	r.PATCH("/updateitem/:id", updateitem)
 	r.GET("/grocerylist", grocerylist)
-	r.GET("/forcelist", forcelistupdate)
 	r.GET("/categories", getcategories)
 	r.POST("/addcategory", addcategory)
 
